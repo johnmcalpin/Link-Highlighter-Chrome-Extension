@@ -1,0 +1,62 @@
+/* Base styles for highlighted links */
+.link-highlighter-regular-link,
+.link-highlighter-js-link {
+  transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out, outline-color 0.2s ease-in-out, padding 0.2s ease-in-out;
+}
+
+/* Ensure highlighted elements maintain their layout */
+.link-highlighter-regular-link,
+.link-highlighter-js-link {
+  box-sizing: border-box !important;
+}
+
+/* Enhanced styling for image links - ensure images don't overflow the padding */
+.link-highlighter-regular-link img,
+.link-highlighter-js-link img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+.link-highlighter-regular-link figure,
+.link-highlighter-js-link figure {
+  margin: 0;
+  max-width: 100%;
+}
+
+/* Ensure images within highlighted links are properly contained */
+.link-highlighter-regular-link:has(img),
+.link-highlighter-js-link:has(img),
+.link-highlighter-regular-link:has(figure),
+.link-highlighter-js-link:has(figure) {
+  display: inline-block !important;
+  overflow: visible;
+  vertical-align: top;
+}
+
+/* Optional: Add subtle animation for visual feedback */
+.link-highlighter-regular-link:hover,
+.link-highlighter-js-link:hover {
+  opacity: 0.9;
+  transition: opacity 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+/* Ensure the extension doesn't break existing layouts */
+.link-highlighter-regular-link *,
+.link-highlighter-js-link * {
+  box-sizing: inherit;
+}
+
+/* Ensure outline stays visible even with transforms */
+.link-highlighter-regular-link,
+.link-highlighter-js-link {
+  transform: translateZ(0);
+}
+
+/* Force clear floats for image links to prevent layout issues */
+.link-highlighter-regular-link:has(img):after,
+.link-highlighter-js-link:has(img):after {
+  content: "";
+  display: table;
+  clear: both;
+}
