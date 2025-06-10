@@ -1,26 +1,40 @@
 {
   "manifest_version": 3,
-  "name": "Link Highlighter",
-  "version": "1.0.0",
-  "description": "Highlight links and modify their behavior on web pages",
+  "name": "SEO Link Highlighter",
+  "version": "1.1.0",
+  "description": "A lightweight Chrome extension that highlights links on web pages and modifies their behavior for better navigation.",
   "permissions": [
     "storage",
     "activeTab",
     "scripting"
   ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Link Highlighter"
+    "default_title": "Link Highlighter",
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
   },
   "background": {
     "service_worker": "background.js"
   },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
   "icons": {
     "16": "icon16.png",
+    "32": "icon32.png",
     "48": "icon48.png",
     "128": "icon128.png"
-  },
-  "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self';"
   }
 }
