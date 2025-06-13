@@ -5,11 +5,7 @@
   "description": "A lightweight Chrome extension that highlights links on web pages and modifies their behavior for better navigation.",
   "permissions": [
     "storage",
-    "activeTab",
-    "scripting"
-  ],
-  "host_permissions": [
-    "<all_urls>"
+    "activeTab"
   ],
   "action": {
     "default_popup": "popup.html",

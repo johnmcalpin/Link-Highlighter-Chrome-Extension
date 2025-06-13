@@ -224,3 +224,9 @@ class PopupController {
 document.addEventListener('DOMContentLoaded', () => {
   new PopupController();
 });
+
+// Get the current date 
+document.addEventListener('DOMContentLoaded', function() {
+  var currentYear = new Date().getFullYear();
+  document.getElementById('currentYear').textContent = currentYear;
+});
