@@ -1,5 +1,8 @@
 // background.js - Service Worker for Link Highlighter Extension
 
+// Track which tabs have content script injected
+const injectedTabs = new Set();
+
 // Initialize extension state on installation - DEFAULTS TO DISABLED
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install') {
@@ -14,6 +17,39 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   }
 });
 
+// Inject content script into a tab if not already injected
+async function ensureContentScript(tabId) {
+  if (injectedTabs.has(tabId)) {
+    return true;
+  }
+  
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      files: ['content.js']
+    });
+    injectedTabs.add(tabId);
+    console.log(`Content script injected into tab ${tabId}`);
+    return true;
+  } catch (error) {
+    console.log(`Failed to inject content script into tab ${tabId}:`, error.message);
+    return false;
+  }
+}
+
+// Send message to tab with content script injection if needed
+async function sendMessageToTab(tabId, message) {
+  const injected = await ensureContentScript(tabId);
+  if (!injected) {
+    throw new Error('Could not inject content script');
+  }
+  
+  // Small delay to ensure content script is ready
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  return chrome.tabs.sendMessage(tabId, message);
+}
+
 // Handle extension toggle from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'toggleExtension') {
@@ -27,24 +63,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         
         console.log('Extension toggled:', { from: currentState, to: newState });
         
-        // Update all active tabs
-        const tabs = await chrome.tabs.query({});
-        const updatePromises = [];
+        // Update current active tab only (using activeTab permission)
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
         
-        for (const tab of tabs) {
-          if (tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
-            const messagePromise = chrome.tabs.sendMessage(tab.id, { 
+        if (activeTab && activeTab.url && (activeTab.url.startsWith('http://') || activeTab.url.startsWith('https://'))) {
+          try {
+            await sendMessageToTab(activeTab.id, { 
               action: newState ? 'enableHighlighting' : 'disableHighlighting' 
-            }).catch(error => {
-              // Tab might not have content script injected yet, ignore error
-              console.log(`Could not message tab ${tab.id}:`, error.message);
             });
-            updatePromises.push(messagePromise);
+          } catch (error) {
+            console.log(`Could not message active tab ${activeTab.id}:`, error.message);
           }
         }
-        
-        // Wait for all tab updates to complete
-        await Promise.allSettled(updatePromises);
         
         sendResponse({ enabled: newState, success: true });
       } catch (error) {
@@ -82,24 +112,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       try {
         await chrome.storage.sync.set(request.settings);
         
-        // Notify all tabs of settings change
-        const tabs = await chrome.tabs.query({});
-        const updatePromises = [];
+        // Update current active tab only
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
         
-        for (const tab of tabs) {
-          if (tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
-            const messagePromise = chrome.tabs.sendMessage(tab.id, { 
+        if (activeTab && activeTab.url && (activeTab.url.startsWith('http://') || activeTab.url.startsWith('https://'))) {
+          try {
+            await sendMessageToTab(activeTab.id, { 
               action: 'updateSettings',
               settings: request.settings
-            }).catch(error => {
-              // Tab might not have content script injected yet, ignore error
-              console.log(`Could not message tab ${tab.id}:`, error.message);
             });
-            updatePromises.push(messagePromise);
+          } catch (error) {
+            console.log(`Could not message active tab ${activeTab.id}:`, error.message);
           }
         }
         
-        await Promise.allSettled(updatePromises);
         sendResponse({ success: true });
       } catch (error) {
         console.error('Error updating settings:', error);
@@ -108,31 +134,38 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     })();
     return true;
   }
+  
+  if (request.action === 'getStatus') {
+    (async () => {
+      try {
+        // Get current active tab
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        
+        if (!activeTab || !activeTab.url || !(activeTab.url.startsWith('http://') || activeTab.url.startsWith('https://'))) {
+          sendResponse({ error: 'Invalid tab' });
+          return;
+        }
+        
+        // Forward the request to the content script
+        const response = await sendMessageToTab(activeTab.id, { action: 'getStatus' });
+        sendResponse(response);
+      } catch (error) {
+        console.error('Error getting status:', error);
+        sendResponse({ error: error.message });
+      }
+    })();
+    return true;
+  }
 });
 
-// Handle tab updates to inject highlighting if enabled
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && 
-      tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
-    
-    try {
-      const result = await chrome.storage.sync.get(['enabled']);
-      const isEnabled = result.enabled === true;
-      
-      // Only send enable message if extension is actually enabled
-      if (isEnabled) {
-        // Add a small delay to ensure content script is loaded
-        setTimeout(async () => {
-          try {
-            await chrome.tabs.sendMessage(tabId, { action: 'enableHighlighting' });
-          } catch (error) {
-            // Content script might not be ready yet, ignore error
-            console.log(`Could not message tab ${tabId} on load:`, error.message);
-          }
-        }, 100);
-      }
-    } catch (error) {
-      console.log(`Error checking state for tab ${tabId}:`, error.message);
-    }
+// Clean up injected tabs tracking when tabs are removed
+chrome.tabs.onRemoved.addListener((tabId) => {
+  injectedTabs.delete(tabId);
+});
+
+// Clean up injected tabs tracking when tabs navigate away
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'loading') {
+    injectedTabs.delete(tabId);
   }
 });

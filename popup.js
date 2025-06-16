@@ -108,7 +108,7 @@ class PopupController {
       console.log('Extension toggled successfully:', response.enabled);
       
       // Update stats after toggle with a longer delay to ensure content script is ready
-      setTimeout(() => this.updateStats(), 500);
+      setTimeout(() => this.updateStats(), 800);
       
     } catch (error) {
       console.error('Error toggling extension:', error);
@@ -162,17 +162,17 @@ class PopupController {
   
   async updateStats() {
     try {
-      // Get current tab
+      // Check current tab compatibility first
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       
-      if (!tab || !tab.url.startsWith('http')) {
+      if (!tab || !tab.url || !(tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
         this.elements.regularCount.textContent = 'N/A';
         this.elements.jsCount.textContent = 'N/A';
         return;
       }
       
-      // Get stats from content script
-      const response = await chrome.tabs.sendMessage(tab.id, { action: 'getStatus' });
+      // Get stats through background script (which handles content script injection)
+      const response = await this.sendMessage({ action: 'getStatus' });
       
       if (response && !response.error) {
         this.elements.regularCount.textContent = response.regularLinks || 0;
@@ -184,6 +184,7 @@ class PopupController {
       
     } catch (error) {
       // Content script might not be ready or page might not support it
+      console.log('Error updating stats:', error);
       this.elements.regularCount.textContent = '0';
       this.elements.jsCount.textContent = '0';
     }
@@ -225,7 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
   new PopupController();
 });
 
-// Get the current date 
+// Set current year in footer
 document.addEventListener('DOMContentLoaded', function() {
   var currentYear = new Date().getFullYear();
   document.getElementById('currentYear').textContent = currentYear;

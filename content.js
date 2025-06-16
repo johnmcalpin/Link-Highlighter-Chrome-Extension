@@ -11,11 +11,19 @@ class LinkHighlighter {
     this.highlightedElements = new Set();
     this.originalClickHandlers = new Map();
     this.observer = null;
+    this.initialized = false;
     
     this.init();
   }
   
   async init() {
+    // Prevent multiple initializations
+    if (this.initialized) {
+      console.log('LinkHighlighter already initialized');
+      return;
+    }
+    this.initialized = true;
+    
     // Listen for messages from background script FIRST
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       this.handleMessage(request, sender, sendResponse);
@@ -38,8 +46,15 @@ class LinkHighlighter {
         openInNewTab: stored.openInNewTab !== undefined ? stored.openInNewTab : true
       };
       
-      // DO NOT auto-start highlighting - wait for explicit enable message
       console.log('Link Highlighter initialized:', { enabled: this.isEnabled });
+      
+      // If enabled, start highlighting immediately (for programmatic injection)
+      if (this.isEnabled) {
+        // Small delay to ensure DOM is ready
+        setTimeout(() => {
+          this.startHighlighting();
+        }, 100);
+      }
       
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -269,17 +284,20 @@ class LinkHighlighter {
   }
 }
 
-// Initialize the link highlighter when the page loads
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    // Add a small delay to ensure everything is ready
+// Prevent multiple instances
+if (!window.linkHighlighterInstance) {
+  // Initialize the link highlighter when the page loads
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      // Add a small delay to ensure everything is ready
+      setTimeout(() => {
+        window.linkHighlighterInstance = new LinkHighlighter();
+      }, 50);
+    });
+  } else {
+    // Document already loaded
     setTimeout(() => {
-      new LinkHighlighter();
+      window.linkHighlighterInstance = new LinkHighlighter();
     }, 50);
-  });
-} else {
-  // Document already loaded
-  setTimeout(() => {
-    new LinkHighlighter();
-  }, 50);
+  }
 }
